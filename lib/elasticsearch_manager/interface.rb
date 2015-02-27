@@ -1,4 +1,4 @@
-# This relies on the elasticsearch-ruby gem.  In theory any other gem
+# This relies on the elasticsearch gem.  In theory any other gem
 # could be used, in which case this file shouldn't be modified, but
 # another class (e.g.  TireInterface) should be implemented which has
 # the same public methods.
@@ -7,7 +7,7 @@
 # interface with Elasticsearch. The contents of indexes and how they
 # are defined are managed from within classes within the
 # Elasticsearch::Index namespace.
-module Elasticsearch
+module ElasticsearchManager
   class Interface
 
     # We make our clients singeltons in order to make use of persistent
@@ -31,25 +31,18 @@ module Elasticsearch
     def self.new_client_for(host, port)
       Elasticsearch::Client.new(
         transport_options: {
-          request: { timeout: AppConfig[:elasticsearch][:http_timeout] }
+          request: { timeout: ElasticsearchManager.configuration.http_timeout }
         },
         # Warning - using multiple hosts here has proven to be highly unstable
         # in production environments, so we just don't do it.
         hosts: [{host: host, port: port}],
-        retry_on_failure: AppConfig[:elasticsearch][:retries]
+        retry_on_failure: ElasticsearchManager.configuration.retries
       )
     end
 
     attr_reader :host
 
-    def initialize(host:, port: 9200, policy: Elasticsearch::InterfacePolicy_1_x)
-      if policy.respond_to?(:constantize)
-        # If we've come straight from config hash, this may be a string
-        @version_policy = policy.constantize
-      else
-        @version_policy = policy
-      end
-
+    def initialize(host:, port: 9200)
       @client = self.class.client_for(host, port)
       @host = host
       @port = port
@@ -74,8 +67,8 @@ module Elasticsearch
 
       response = client.indices.create(payload)
 
-      unless @version_policy.create_successful?(response)
-        raise "Elasticsearch::Interface - Failed to create index #{index_name}: #{response.inspect}."
+      unless response["acknowledged"] == true
+        raise "ElasticsearchManager::Interface - Failed to create index #{index_name}: #{response.inspect}."
       end
 
       response
@@ -92,10 +85,6 @@ module Elasticsearch
         id:     document[:id],
         body:   document
       )
-
-      unless @version_policy.store_successful?(response)
-        raise "Elasticsearch::Interface - Failed to store document #{document} in #{index_name}: #{response.inspect}. #{error_help_for("This")}"
-      end
 
       if Feature.enabled?(:elasticsearch_logging)
         Rails.logger.info("Elasticsearch Response: #{response.inspect}")
@@ -154,7 +143,7 @@ module Elasticsearch
       # TODO: This clearly doesn't work because response doesn't exist. Leaving
       # as-is for the moment, but bear in mind that response_status_field also
       # doesn't exist either if you want to fix this!
-      unless response[@version_policy.response_status_field] == true
+      unless response["acknowledged"] == true
         raise "Elasticsearch::Interface.update: Failed to update document (##{id}) #{document} in #{index_name}: #{response.inspect}. #{error_help_for("This")}"
       end
       response
@@ -268,7 +257,13 @@ module Elasticsearch
     end
 
     def sucessful_operation_on_document?(item)
-      @version_policy.successful_operation_on_document?(item)
+      # Because the action may not be "create" but "update" or
+      # "delete", we need this unreadable chain to fetch the result of
+      # the operation.  Note that for creation, status will be 201, update will
+      # give 200
+      #
+      # Example item: {"create"=>{"_index"=>"ed_test", "_type"=>"ed", "_id"=>"1", "_version"=>3, "status"=>200}}
+      item.first && item.first.second && [200, 201].include?(item.first.second["status"])
     end
   end
 end
