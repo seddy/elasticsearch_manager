@@ -6,7 +6,7 @@
 # This class is soley responsible for physically managing our
 # interface with Elasticsearch. The contents of indexes and how they
 # are defined are managed from within classes within the
-# Elasticsearch::Index namespace.
+# ElasticsearchManager::Index namespace.
 module ElasticsearchManager
   class Interface
 
@@ -127,7 +127,7 @@ module ElasticsearchManager
           errors << "(#{index_name}: #{item.inspect})"
         end
 
-        raise ["Elasticsearch::Interface.bulk_store: Failed to store documents, #{error_help_for("these")}:"].concat(errors).join(", ") if errors.any?
+        raise ["ElasticsearchManager::Interface.bulk_store: Failed to store documents, #{error_help_for("these")}:"].concat(errors).join(", ") if errors.any?
       end
 
       response
@@ -144,7 +144,7 @@ module ElasticsearchManager
       # as-is for the moment, but bear in mind that response_status_field also
       # doesn't exist either if you want to fix this!
       unless response["acknowledged"] == true
-        raise "Elasticsearch::Interface.update: Failed to update document (##{id}) #{document} in #{index_name}: #{response.inspect}. #{error_help_for("This")}"
+        raise "ElasticsearchManager::Interface.update: Failed to update document (##{id}) #{document} in #{index_name}: #{response.inspect}. #{error_help_for("This")}"
       end
       response
     end
@@ -253,7 +253,7 @@ module ElasticsearchManager
     attr_reader :client
 
     def error_help_for(subject = "")
-      "#{subject} can be retried by running (e.g. for a product 1234) 'Elasticsearch::Index::Product.new.store(Product.find(1234))' in a console"
+      "#{subject} can be retried by running (e.g. for a product 1234) 'ElasticsearchManager::Index::Product.new.store(Product.find(1234))' in a console"
     end
 
     def sucessful_operation_on_document?(item)
