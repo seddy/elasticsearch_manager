@@ -1,3 +1,5 @@
 source "https://rubygems.org"
 
-gem "elasticsearch-ruby"
+gem "elasticsearch"
+gem "rspec"
+gem "pry"
